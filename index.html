@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PromptVault — AI Prompt Engineering Studio</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-950 text-gray-100 font-sans h-screen flex flex-col overflow-hidden">
+
+    <!-- Top Navigation Bar -->
+    <header class="h-14 border-b border-gray-800 bg-gray-900/50 backdrop-blur px-6 flex items-center justify-between shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
+                <i class="fa-solid fa-[#]">PV</i>
+            </div>
+            <span class="font-semibold text-lg tracking-wide text-white">PromptVault <span class="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/30 font-normal">v1.0 Studio</span></span>
+        </div>
+        <div class="flex items-center space-x-4">
+            <span class="text-xs text-gray-400 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Mock API Connected
+            </span>
+            <button onclick="createNewPrompt()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium px-3 py-1.5 rounded-md transition flex items-center gap-2">
+                <i class="fa-solid fa-plus"></i> New Prompt
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- Sidebar: Prompt Library -->
+        <aside class="w-72 border-r border-gray-800 bg-gray-900/30 flex flex-col shrink-0">
+            <div class="p-4 border-b border-gray-800">
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-gray-500"></i>
+                    <input type="text" id="searchInput" oninput="renderPromptList()" placeholder="Search prompts..." class="w-full bg-gray-900 border border-gray-800 rounded-md pl-8 pr-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-indigo-500">
+                </div>
+                <!-- Categories -->
+                <div class="flex gap-1 mt-3 overflow-x-auto pb-1 no-scrollbar text-xs">
+                    <button onclick="setCategory('All')" class="cat-btn bg-indigo-600 text-white px-2.5 py-1 rounded-md font-medium">All</button>
+                    <button onclick="setCategory('Coding')" class="cat-btn bg-gray-800 text-gray-400 hover:text-gray-200 px-2.5 py-1 rounded-md">Coding</button>
+                    <button onclick="setCategory('Writing')" class="cat-btn bg-gray-800 text-gray-400 hover:text-gray-200 px-2.5 py-1 rounded-md">Writing</button>
+                    <button onclick="setCategory('Marketing')" class="cat-btn bg-gray-800 text-gray-400 hover:text-gray-200 px-2.5 py-1 rounded-md">Marketing</button>
+                </div>
+            </div>
+
+            <!-- List Container -->
+            <div id="promptList" class="flex-1 overflow-y-auto p-2 space-y-1">
+                <!-- Dynamic List Items -->
+            </div>
+        </aside>
+
+        <!-- Center Studio Panel -->
+        <main class="flex-1 flex flex-col bg-gray-950 overflow-y-auto p-6 space-y-6">
+            
+            <!-- Metadata & Title Header -->
+            <div class="flex justify-between items-start border-b border-gray-800/80 pb-4">
+                <div class="space-y-1 w-full max-w-xl">
+                    <input type="text" id="promptTitle" onchange="updateCurrentPrompt()" class="bg-transparent text-xl font-bold text-white focus:outline-none focus:border-b border-indigo-500 w-full" placeholder="Prompt Title...">
+                    <div class="flex items-center gap-3 text-xs text-gray-400">
+                        <span>Category:</span>
+                        <select id="promptCategory" onchange="updateCurrentPrompt()" class="bg-gray-900 border border-gray-800 rounded px-2 py-0.5 text-gray-300 focus:outline-none focus:border-indigo-500">
+                            <option value="Coding">Coding</option>
+                            <option value="Writing">Writing</option>
+                            <option value="Marketing">Marketing</option>
+                            <option value="General">General</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="deleteCurrentPrompt()" class="text-xs text-rose-400 hover:text-rose-300 bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded transition">
+                        <i class="fa-regular fa-trash-can mr-1"></i> Delete
+                    </button>
+                    <button onclick="saveCurrentPrompt()" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 px-3 py-1.5 rounded transition">
+                        <i class="fa-regular fa-floppy-disk mr-1"></i> Save
+                    </button>
+                </div>
+            </div>
+
+            <!-- Editor Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1">
+                
+                <!-- Left: Template Editor & Dynamic Input -->
+                <div class="flex flex-col space-y-4">
+                    <div class="flex justify-between items-center">
+                        <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="fa-solid fa-code text-indigo-400"></i> Prompt Template
+                        </label>
+                        <span class="text-[10px] text-gray-500">Use <code class="bg-gray-800 px-1 py-0.5 rounded text-indigo-300">{var_name}</code> for variables</span>
+                    </div>
+                    <textarea id="promptTemplate" oninput="handleTemplateChange()" rows="8" class="w-full bg-gray-900/90 border border-gray-800 rounded-lg p-3 text-sm text-gray-200 font-mono focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none" placeholder="Enter template, e.g.: Explain {topic} in simple terms for a {target_audience}..."></textarea>
+
+                    <!-- Dynamic Variables Section -->
+                    <div class="space-y-3 bg-gray-900/40 border border-gray-800/80 rounded-lg p-4">
+                        <div class="text-xs font-medium text-gray-400 flex items-center justify-between">
+                            <span>Detected Variables</span>
+                            <span id="varCount" class="text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">0 found</span>
+                        </div>
+                        <div id="variablesContainer" class="space-y-2">
+                            <p class="text-xs text-gray-600 italic">No variables detected yet. Add {var} to template above.</p>
+                        </div>
+                    </div>
+
+                    <!-- Run Button -->
+                    <button onclick="runPrompt()" id="runBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 rounded-lg transition flex items-center justify-center gap-2 text-sm shadow-lg shadow-indigo-600/20">
+                        <i class="fa-solid fa-play text-xs"></i> Execute Prompt
+                    </button>
+                </div>
+
+                <!-- Right: Output Studio -->
+                <div class="flex flex-col space-y-4">
+                    <div class="flex justify-between items-center">
+                        <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="fa-solid fa-terminal text-emerald-400"></i> Model Output Response
+                        </label>
+                        <button onclick="copyOutput()" class="text-xs text-gray-400 hover:text-gray-200 transition">
+                            <i class="fa-regular fa-copy"></i> Copy Output
+                        </button>
+                    </div>
+
+                    <div id="outputContainer" class="flex-1 min-h-[300px] bg-gray-900/90 border border-gray-800 rounded-lg p-4 font-mono text-sm text-gray-300 overflow-y-auto whitespace-pre-wrap leading-relaxed relative">
+                        <span class="text-gray-600 italic">Click "Execute Prompt" to view output here...</span>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        // Initial Mock Database
+        let defaultPrompts = [
+            {
+                id: '1',
+                title: 'Code Explainer & Refactor',
+                category: 'Coding',
+                template: 'Analyze the following {language} code for performance issues and explain how it works:\n\n```\n{code_snippet}\n```\nProvide a cleaner refactored version.',
+                variables: { language: 'JavaScript', code_snippet: 'for(let i=0; i<arr.length; i++) { console.log(arr[i]); }' }
+            },
+            {
+                id: '2',
+                title: 'Cold Outreach Email Generator',
+                category: 'Writing',
+                template: 'Write a professional cold email to {prospect_name}, who is a {job_title} at {company_name}. Highlight our solution {product_name} that helps with {pain_point}.',
+                variables: { prospect_name: 'John Doe', job_title: 'CTO', company_name: 'Tech Corp', product_name: 'PromptVault', pain_point: 'managing team AI workflows' }
+            },
+            {
+                id: '3',
+                title: 'Product Feature Launch Post',
+                category: 'Marketing',
+                template: 'Create a catchy LinkedIn post announcing the launch of {feature_name}. Key benefits: {benefits}. Target Audience: {audience}. Include relevant hashtags.',
+                variables: { feature_name: 'AI Variable Auto-Fill', benefits: 'Saves 5 hours a week, prevents prompt errors', audience: 'Developers & Product Managers' }
+            }
+        ];
+
+        let prompts = JSON.parse(localStorage.getItem('promptvault_prompts')) || defaultPrompts;
+        let currentPromptId = prompts[0]?.id || null;
+        let activeCategory = 'All';
+
+        // Initialize UI
+        window.addEventListener('DOMContentLoaded', () => {
+            renderPromptList();
+            if(currentPromptId) selectPrompt(currentPromptId);
+        });
+
+        // Render Sidebar List
+        function renderPromptList() {
+            const listEl = document.getElementById('promptList');
+            const searchVal = document.getElementById('searchInput').value.toLowerCase();
+            
+            listEl.innerHTML = '';
+
+            const filtered = prompts.filter(p => {
+                const matchesCat = activeCategory === 'All' || p.category === activeCategory;
+                const matchesSearch = p.title.toLowerCase().includes(searchVal) || p.template.toLowerCase().includes(searchVal);
+                return matchesCat && matchesSearch;
+            });
+
+            filtered.forEach(p => {
+                const isSelected = p.id === currentPromptId;
+                const item = document.createElement('div');
+                item.className = `p-3 rounded-md cursor-pointer transition text-xs border ${isSelected ? 'bg-indigo-600/10 border-indigo-500/40 text-white' : 'border-transparent text-gray-400 hover:bg-gray-900 hover:text-gray-200'}`;
+                item.onclick = () => selectPrompt(p.id);
+                item.innerHTML = `
+                    <div class="font-medium truncate text-sm ${isSelected ? 'text-indigo-400' : 'text-gray-300'}">${p.title || 'Untitled Prompt'}</div>
+                    <div class="flex justify-between items-center mt-1 text-[10px]">
+                        <span class="bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">${p.category}</span>
+                        <span class="text-gray-600">${Object.keys(p.variables || {}).length} vars</span>
+                    </div>
+                `;
+                listEl.appendChild(item);
+            });
+        }
+
+        // Category Filter
+        function setCategory(cat) {
+            activeCategory = cat;
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                if(btn.innerText === cat) {
+                    btn.className = "cat-btn bg-indigo-600 text-white px-2.5 py-1 rounded-md font-medium";
+                } else {
+                    btn.className = "cat-btn bg-gray-800 text-gray-400 hover:text-gray-200 px-2.5 py-1 rounded-md";
+                }
+            });
+            renderPromptList();
+        }
+
+        // Select Prompt
+        function selectPrompt(id) {
+            currentPromptId = id;
+            const prompt = prompts.find(p => p.id === id);
+            if(!prompt) return;
+
+            document.getElementById('promptTitle').value = prompt.title;
+            document.getElementById('promptCategory').value = prompt.category;
+            document.getElementById('promptTemplate').value = prompt.template;
+
+            renderPromptList();
+            handleTemplateChange(prompt.variables);
+        }
+
+        // Handle Variable Detection from Template
+        function handleTemplateChange(savedVars = {}) {
+            const template = document.getElementById('promptTemplate').value;
+            const regex = /\{([a-zA-Z0-9_]+)\}/g;
+            const container = document.getElementById('variablesContainer');
+            
+            let matches = [];
+            let match;
+            while ((match = regex.exec(template)) !== null) {
+                if (!matches.includes(match[1])) {
+                    matches.push(match[1]);
+                }
+            }
+
+            document.getElementById('varCount').innerText = `${matches.length} found`;
+            container.innerHTML = '';
+
+            if (matches.length === 0) {
+                container.innerHTML = `<p class="text-xs text-gray-600 italic">No variables detected yet. Add {var} to template above.</p>`;
+                return;
+            }
+
+            const currentPrompt = prompts.find(p => p.id === currentPromptId);
+
+            matches.forEach(v => {
+                const val = savedVars[v] || currentPrompt?.variables?.[v] || '';
+                const wrapper = document.createElement('div');
+                wrapper.className = "flex items-center gap-2 text-xs";
+                wrapper.innerHTML = `
+                    <label class="w-1/3 text-indigo-300 font-mono text-[11px] truncate">{${v}}</label>
+                    <input type="text" data-var="${v}" value="${val}" oninput="saveVarValues()" class="var-input w-2/3 bg-gray-900 border border-gray-800 rounded px-2 py-1 text-gray-200 focus:outline-none focus:border-indigo-500">
+                `;
+                container.appendChild(wrapper);
+            });
+        }
+
+        // Collect Variable Values
+        function getVarValues() {
+            const vars = {};
+            document.querySelectorAll('.var-input').forEach(input => {
+                vars[input.getAttribute('data-var')] = input.value;
+            });
+            return vars;
+        }
+
+        function saveVarValues() {
+            const prompt = prompts.find(p => p.id === currentPromptId);
+            if(prompt) {
+                prompt.variables = getVarValues();
+            }
+        }
+
+        // Save Prompt Changes
+        function updateCurrentPrompt() {
+            const prompt = prompts.find(p => p.id === currentPromptId);
+            if(prompt) {
+                prompt.title = document.getElementById('promptTitle').value;
+                prompt.category = document.getElementById('promptCategory').value;
+                prompt.template = document.getElementById('promptTemplate').value;
+                prompt.variables = getVarValues();
+                saveToLocalStorage();
+                renderPromptList();
+            }
+        }
+
+        function saveCurrentPrompt() {
+            updateCurrentPrompt();
+            alert('Prompt saved successfully!');
+        }
+
+        // Create New Prompt
+        function createNewPrompt() {
+            const newP = {
+                id: Date.now().toString(),
+                title: 'New Prompt Template',
+                category: 'General',
+                template: 'Write a summary about {topic}.',
+                variables: { topic: 'Artificial Intelligence' }
+            };
+            prompts.unshift(newP);
+            saveToLocalStorage();
+            selectPrompt(newP.id);
+        }
+
+        // Delete Prompt
+        function deleteCurrentPrompt() {
+            if(prompts.length <= 1) {
+                alert("You need to keep at least one prompt!");
+                return;
+            }
+            prompts = prompts.filter(p => p.id !== currentPromptId);
+            saveToLocalStorage();
+            selectPrompt(prompts[0].id);
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('promptvault_prompts', JSON.stringify(prompts));
+        }
+
+        // Execute Prompt (Mock AI Call)
+        function runPrompt() {
+            updateCurrentPrompt();
+            const prompt = prompts.find(p => p.id === currentPromptId);
+            const varValues = getVarValues();
+            const outputEl = document.getElementById('outputContainer');
+            const runBtn = document.getElementById('runBtn');
+
+            // Replace variables in template
+            let filledPrompt = prompt.template;
+            for(let k in varValues) {
+                filledPrompt = filledPrompt.replaceAll(`{${k}}`, varValues[k] || `[${k}]`);
+            }
+
+            // UI Loading state
+            runBtn.disabled = true;
+            runBtn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-xs"></i> Processing with AI...`;
+            outputEl.innerHTML = `<span class="text-indigo-400 animate-pulse">Sending query to Model...</span>`;
+
+            setTimeout(() => {
+                runBtn.disabled = false;
+                runBtn.innerHTML = `<i class="fa-solid fa-play text-xs"></i> Execute Prompt`;
+
+                // Mock Output Generation Logic
+                let mockResponse = "";
+                if(prompt.category === 'Coding') {
+                    mockResponse = `// Optimized & Refactored Output\n// Target: ${varValues.language || 'Code'}\n\nfunction processData(items) {\n    if (!Array.isArray(items)) return [];\n    return items.map(item => ({\n        ...item,\n        processedAt: new Date().toISOString()\n    }));\n}\n\n/* Explanation:\n1. Replaced simple loop with declarative array map.\n2. Added type safety checks to prevent runtime exceptions.\n*/`;
+                } else if(prompt.category === 'Writing') {
+                    mockResponse = `Subject: Quick question regarding ${varValues.pain_point || 'your workflow'}\n\nHi ${varValues.prospect_name || 'There'},\n\nI noticed your work as ${varValues.job_title || 'Leader'} at ${varValues.company_name || 'your team'}. Many teams in your domain struggle with ${varValues.pain_point || 'efficiency'}.\n\nWith ${varValues.product_name || 'our platform'}, you can streamline this in minutes.\n\nWould you be open to a 5-minute chat next Tuesday?\n\nBest regards,\nJayant Kumar`;
+                } else {
+                    mockResponse = `### Executed Strategy Response\n\nPrompt Executed: "${filledPrompt}"\n\n1. **Key Insight**: The variables were successfully parsed into the execution context.\n2. **Actionable Output**: Generated structured response tailored for target audience.\n3. **Quality Score**: 98.5% (Optimal parameter alignment).`;
+                }
+
+                outputEl.innerText = mockResponse;
+            }, 1000);
+        }
+
+        function copyOutput() {
+            const text = document.getElementById('outputContainer').innerText;
+            navigator.clipboard.writeText(text);
+            alert("Copied response to clipboard!");
+        }
+    </script>
+</body>
+</html>
