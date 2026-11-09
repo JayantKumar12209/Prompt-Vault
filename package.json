@@ -1,0 +1,22 @@
+{
+  "name": "prompt-vault",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A secure, full-stack prompt management and execution platform.",
+  "workspaces": [
+    "frontend",
+    "backend",
+    "shared"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "build:shared": "tsc -b shared",
+    "typecheck:shared": "tsc --noEmit -p shared/tsconfig.json",
+    "test:shared": "npm run build:shared && node --test shared/test/*.test.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
