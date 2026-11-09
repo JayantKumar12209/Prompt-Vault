@@ -1,15 +1,11 @@
-// PromptVault — Prisma schema (Phase 2 design draft, not yet migrated or run)
-// NOTE: datasource syntax depends on the Prisma major version pinned in Phase 3.
-// If the installed version requires prisma.config.ts for connection URLs, this file will be adapted.
-
+// PromptVault — Prisma schema (Phase 3: validation and client generation)
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL") // pooled connection (app runtime)
-  directUrl = env("DIRECT_URL")   // direct connection (migrations, needed for Neon)
+  provider = "postgresql"
 }
 
 enum AIProviderName {
