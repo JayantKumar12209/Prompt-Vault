@@ -16,7 +16,6 @@
     "build:shared": "tsc -b shared",
     "typecheck:shared": "tsc --noEmit -p shared/tsconfig.json",
     "test:shared": "npm run build:shared && node --test shared/test/*.test.mjs",
-    "dev:backend:watch": "npm run dev -w @prompt-vault/backend",
     "build:backend": "npm run build -w @prompt-vault/backend",
     "typecheck:backend": "npm run typecheck -w @prompt-vault/backend",
     "build": "npm run build:shared && npm run build:backend",
