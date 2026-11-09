@@ -24,7 +24,7 @@ test("preserves first appearance order and removes duplicates", () => {
 });
 
 test("ignores escaped literal openers", () => {
-  assert.deepEqual(detectVariables(String.raw`Use \\{{not_a_variable}}`), {
+  assert.deepEqual(detectVariables(String.raw`Use \{{not_a_variable}}`), {
     variables: [],
     malformed: []
   });
