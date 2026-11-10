@@ -5,6 +5,7 @@ import { notFound } from "./middleware/not-found.js";
 import { originCheck } from "./middleware/origin-check.js";
 import { requestId } from "./middleware/request-id.js";
 import { requestLogger } from "./middleware/request-logger.js";
+import { authRouter } from "./routes/auth.js";
 import { healthRouter } from "./routes/health.js";
 
 export const app = express();
@@ -17,5 +18,6 @@ app.use(originCheck);
 app.use(express.json({ limit: "100kb" }));
 
 app.use("/api/health", healthRouter);
+app.use("/api/auth", authRouter);
 app.use(notFound);
 app.use(errorHandler);
