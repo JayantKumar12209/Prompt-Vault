@@ -148,7 +148,7 @@ router.get("/", requireAuth, async (req, res, next) => {
       } : {})
     };
 
-    const client = getPrismaClient();
+    const client = getClient();
     const [prompts, total] = await client.$transaction([
       client.prompt.findMany({
         where,
@@ -172,7 +172,7 @@ router.get("/", requireAuth, async (req, res, next) => {
   }
 });
 
-promptsRouter.get("/:id", requireAuth, async (req, res, next) => {
+router.get("/:id", requireAuth, async (req, res, next) => {
   try {
     const promptId = req.params.id;
     if (typeof promptId !== "string" || promptId.length === 0) {
