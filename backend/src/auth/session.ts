@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { CookieOptions, Request } from "express";
+import type { PrismaClient } from "../generated/prisma/client.js";
 import { env } from "../config/env.js";
 import { getPrismaClient } from "../config/database.js";
 
@@ -47,11 +48,14 @@ export function hashSessionToken(token: string): string {
   return createHash("sha256").update(token, "utf8").digest("hex");
 }
 
-export async function createSession(userId: string): Promise<string> {
+export async function createSession(
+  userId: string,
+  client: PrismaClient = getPrismaClient()
+): Promise<string> {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
 
-  await getPrismaClient().session.create({
+  await client.session.create({
     data: {
       userId,
       tokenHash: hashSessionToken(token),

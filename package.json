@@ -20,7 +20,7 @@
     "typecheck:backend": "npm run typecheck -w @prompt-vault/backend",
     "build": "npm run build:shared && npm run build:backend",
     "typecheck": "npm run typecheck:shared && npm run typecheck:backend",
-    "test": "npm run test:shared"
+    "test": "npm run test:shared && npm run test -w @prompt-vault/backend"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

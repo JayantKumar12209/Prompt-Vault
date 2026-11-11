@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type Router } from "express";
 import helmet from "helmet";
 import { errorHandler } from "./middleware/error-handler.js";
 import { notFound } from "./middleware/not-found.js";
@@ -8,16 +8,22 @@ import { requestLogger } from "./middleware/request-logger.js";
 import { authRouter } from "./routes/auth.js";
 import { healthRouter } from "./routes/health.js";
 
-export const app = express();
+export function createApp(authRouterInstance: Router = authRouter) {
+  const application = express();
 
-app.disable("x-powered-by");
-app.use(requestId);
-app.use(requestLogger);
-app.use(helmet());
-app.use(originCheck);
-app.use(express.json({ limit: "100kb" }));
+  application.disable("x-powered-by");
+  application.use(requestId);
+  application.use(requestLogger);
+  application.use(helmet());
+  application.use(originCheck);
+  application.use(express.json({ limit: "100kb" }));
 
-app.use("/api/health", healthRouter);
-app.use("/api/auth", authRouter);
-app.use(notFound);
-app.use(errorHandler);
+  application.use("/api/health", healthRouter);
+  application.use("/api/auth", authRouterInstance);
+  application.use(notFound);
+  application.use(errorHandler);
+
+  return application;
+}
+
+export const app = createApp();
