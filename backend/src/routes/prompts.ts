@@ -203,6 +203,7 @@ router.get("/:id", requireAuth, async (req, res, next) => {
   }
 });
 
+  return router;
 }
 
 export const promptsRouter = createPromptsRouter();
