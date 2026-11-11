@@ -68,6 +68,12 @@ function createFakePrisma() {
       (!where.categoryId || prompt.categoryId === where.categoryId) &&
       (!where.tags || prompt.tags.includes(where.tags.has))
     ).slice(skip, take === undefined ? undefined : skip + take),
+    deleteMany: async ({ where }: any) => {
+      const prompt = prompts.get(where.id);
+      if (!prompt || prompt.userId !== where.userId) return { count: 0 };
+      prompts.delete(where.id);
+      return { count: 1 };
+    },
     count: async ({ where }: any) => [...prompts.values()].filter((prompt) =>
       prompt.userId === where.userId &&
       (!where.categoryId || prompt.categoryId === where.categoryId) &&
@@ -205,3 +211,105 @@ test("prompt list supports pagination and tag filtering", async () => {
     assert.equal(body.pagination.totalPages, 2);
   });
 });
+
+test("prompt update changes metadata without creating a new version", async () => {
+  await withServer(async (baseUrl) => {
+    const cookie = await register(baseUrl, "metadata@example.com");
+    const created = await request(baseUrl, "/api/prompts", {
+      cookie, body: { title: "Original", template: "Hello {{name}}", tags: ["old"] }
+    });
+    const promptId = ((await created.json()) as any).prompt.id;
+
+    const updated = await request(baseUrl, `/api/prompts/${promptId}`, {
+      method: "PATCH", cookie, body: { title: "Renamed", tags: ["new", "new"] }
+    });
+    assert.equal(updated.status, 200);
+    const prompt = ((await updated.json()) as any).prompt;
+    assert.equal(prompt.title, "Renamed");
+    assert.deepEqual(prompt.tags, ["new"]);
+    assert.equal(prompt.currentVersion.versionNumber, 1);
+    assert.equal(prompt.versions.length, 1);
+  });
+});
+
+test("prompt content update creates a new immutable version and preserves matching variable metadata", async () => {
+  await withServer(async (baseUrl) => {
+    const cookie = await register(baseUrl, "version@example.com");
+    const created = await request(baseUrl, "/api/prompts", {
+      cookie,
+      body: {
+        title: "Versioned",
+        template: "Hello {{name}}",
+        variables: [{ name: "name", description: "Person's name", defaultValue: "Ada" }]
+      }
+    });
+    const promptId = ((await created.json()) as any).prompt.id;
+
+    const updated = await request(baseUrl, `/api/prompts/${promptId}`, {
+      method: "PATCH", cookie, body: { template: "Hello {{name}}, welcome to {{place}}" }
+    });
+    assert.equal(updated.status, 200);
+    const prompt = ((await updated.json()) as any).prompt;
+    assert.equal(prompt.currentVersion.versionNumber, 2);
+    assert.equal(prompt.currentVersion.template, "Hello {{name}}, welcome to {{place}}");
+    assert.deepEqual(prompt.currentVersion.variables.map((item: any) => item.name), ["name", "place"]);
+    assert.equal(prompt.currentVersion.variables[0].description, "Person's name");
+    assert.equal(prompt.currentVersion.variables[0].defaultValue, "Ada");
+    assert.equal(prompt.currentVersion.variables[1].required, true);
+  });
+});
+
+test("prompt update rejects empty and malformed changes and blocks other users", async () => {
+  await withServer(async (baseUrl) => {
+    const ownerCookie = await register(baseUrl, "patch-owner@example.com");
+    const otherCookie = await register(baseUrl, "patch-other@example.com");
+    const created = await request(baseUrl, "/api/prompts", {
+      cookie: ownerCookie, body: { title: "Private", template: "Hello {{name}}" }
+    });
+    const promptId = ((await created.json()) as any).prompt.id;
+
+    const empty = await request(baseUrl, `/api/prompts/${promptId}`, {
+      method: "PATCH", cookie: ownerCookie, body: {}
+    });
+    assert.equal(empty.status, 400);
+
+    const malformed = await request(baseUrl, `/api/prompts/${promptId}`, {
+      method: "PATCH", cookie: ownerCookie, body: { template: "Broken {{name" }
+    });
+    assert.equal(malformed.status, 400);
+
+    const otherUpdate = await request(baseUrl, `/api/prompts/${promptId}`, {
+      method: "PATCH", cookie: otherCookie, body: { title: "Stolen" }
+    });
+    assert.equal(otherUpdate.status, 404);
+  });
+});
+
+test("prompt delete removes only the owner's prompt and returns not found for other users", async () => {
+  await withServer(async (baseUrl, db) => {
+    const ownerCookie = await register(baseUrl, "delete-owner@example.com");
+    const otherCookie = await register(baseUrl, "delete-other@example.com");
+    const created = await request(baseUrl, "/api/prompts", {
+      cookie: ownerCookie, body: { title: "Disposable", template: "Goodbye" }
+    });
+    const promptId = ((await created.json()) as any).prompt.id;
+
+    const forbidden = await request(baseUrl, `/api/prompts/${promptId}`, {
+      method: "DELETE", cookie: otherCookie
+    });
+    assert.equal(forbidden.status, 404);
+    assert.equal(db.prompts.size, 1);
+
+    const deleted = await request(baseUrl, `/api/prompts/${promptId}`, {
+      method: "DELETE", cookie: ownerCookie
+    });
+    assert.equal(deleted.status, 204);
+    assert.equal(db.prompts.size, 0);
+
+    const repeated = await request(baseUrl, `/api/prompts/${promptId}`, {
+      method: "DELETE", cookie: ownerCookie
+    });
+    assert.equal(repeated.status, 404);
+  });
+});
+
