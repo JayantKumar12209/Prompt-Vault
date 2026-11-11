@@ -6,6 +6,7 @@ import { originCheck } from "./middleware/origin-check.js";
 import { requestId } from "./middleware/request-id.js";
 import { requestLogger } from "./middleware/request-logger.js";
 import { authRouter } from "./routes/auth.js";
+import { promptsRouter } from "./routes/prompts.js";
 import { healthRouter } from "./routes/health.js";
 
 export function createApp(authRouterInstance: Router = authRouter) {
@@ -20,6 +21,7 @@ export function createApp(authRouterInstance: Router = authRouter) {
 
   application.use("/api/health", healthRouter);
   application.use("/api/auth", authRouterInstance);
+  application.use("/api/prompts", promptsRouter);
   application.use(notFound);
   application.use(errorHandler);
 
