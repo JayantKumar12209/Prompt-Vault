@@ -249,8 +249,12 @@ router.patch("/:id", requireAuth, async (req, res, next) => {
       const supplied = suppliedByName.get(name);
       return {
         name,
-        description: supplied?.description ?? previous?.description ?? null,
-        defaultValue: supplied?.defaultValue ?? previous?.defaultValue ?? null,
+        description: supplied?.description !== undefined
+          ? supplied.description
+          : previous?.description ?? null,
+        defaultValue: supplied?.defaultValue !== undefined
+          ? supplied.defaultValue
+          : previous?.defaultValue ?? null,
         required: supplied?.required ?? previous?.required ?? true
       };
     });
