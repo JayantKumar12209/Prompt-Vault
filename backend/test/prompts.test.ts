@@ -295,19 +295,19 @@ test("prompt delete removes only the owner's prompt and returns not found for ot
     const promptId = ((await created.json()) as any).prompt.id;
 
     const forbidden = await request(baseUrl, `/api/prompts/${promptId}`, {
-      method: "DELETE", cookie: otherCookie
+      method: "DELETE", cookie: otherCookie, body: {}
     });
     assert.equal(forbidden.status, 404);
     assert.equal(db.prompts.size, 1);
 
     const deleted = await request(baseUrl, `/api/prompts/${promptId}`, {
-      method: "DELETE", cookie: ownerCookie
+      method: "DELETE", cookie: ownerCookie, body: {}
     });
     assert.equal(deleted.status, 204);
     assert.equal(db.prompts.size, 0);
 
     const repeated = await request(baseUrl, `/api/prompts/${promptId}`, {
-      method: "DELETE", cookie: ownerCookie
+      method: "DELETE", cookie: ownerCookie, body: {}
     });
     assert.equal(repeated.status, 404);
   });
