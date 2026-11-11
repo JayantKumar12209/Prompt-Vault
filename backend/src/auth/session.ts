@@ -36,7 +36,10 @@ export function readSessionToken(req: Request): string | null {
 
   if (matching.length !== 1) return null;
 
-  const token = matching[0].slice(SESSION_COOKIE_NAME.length + 1);
+  const cookie = matching[0];
+  if (cookie === undefined) return null;
+
+  const token = cookie.slice(SESSION_COOKIE_NAME.length + 1);
   return /^[A-Za-z0-9_-]{43}$/.test(token) ? token : null;
 }
 

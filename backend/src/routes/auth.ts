@@ -67,7 +67,7 @@ authRouter.post("/register", authRateLimiter, async (req, res, next) => {
     // User and first session are committed atomically.
     const created = await getPrismaClient().$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { email, passwordHash, displayName }
+        data: { email, passwordHash, displayName: displayName ?? null }
       });
       const token = randomBytes(32).toString("base64url");
 
