@@ -171,8 +171,14 @@ promptsRouter.get("/", requireAuth, async (req, res, next) => {
 
 promptsRouter.get("/:id", requireAuth, async (req, res, next) => {
   try {
+    const promptId = req.params.id;
+    if (typeof promptId !== "string" || promptId.length === 0) {
+      next(notFound());
+      return;
+    }
+
     const prompt = await getPrismaClient().prompt.findFirst({
-      where: { id: req.params.id, userId: req.auth!.userId },
+      where: { id: promptId, userId: req.auth!.userId },
       include: {
         category: true,
         currentVersion: { include: { variables: true } },
