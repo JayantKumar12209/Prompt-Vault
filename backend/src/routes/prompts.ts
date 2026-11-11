@@ -210,6 +210,8 @@ router.patch("/:id", requireAuth, async (req, res, next) => {
       return;
     }
 
+    // Capture the checked relation before entering the transaction callback.
+    const existingVersion = existing.currentVersion;
     const changes = parsed.data;
     if (changes.categoryId) {
       const category = await client.category.findFirst({
@@ -222,7 +224,7 @@ router.patch("/:id", requireAuth, async (req, res, next) => {
       }
     }
 
-    const nextTemplate = changes.template ?? existing.currentVersion.template;
+    const nextTemplate = changes.template ?? existingVersion.template;
     const detected = detectVariables(nextTemplate);
     if (detected.malformed.length > 0) {
       next(validationError("The template contains malformed variable placeholders."));
@@ -241,7 +243,7 @@ router.patch("/:id", requireAuth, async (req, res, next) => {
     }
 
     const previousVariables = new Map(
-      existing.currentVersion.variables.map((variable) => [variable.name, variable])
+      existingVersion.variables.map((variable) => [variable.name, variable])
     );
     const suppliedByName = new Map(suppliedVariables.map((variable) => [variable.name, variable]));
     const nextVariables = detected.variables.map((name) => {
@@ -259,7 +261,7 @@ router.patch("/:id", requireAuth, async (req, res, next) => {
       };
     });
 
-    const variablesChanged = nextVariables.length !== existing.currentVersion.variables.length ||
+    const variablesChanged = nextVariables.length !== existingVersion.variables.length ||
       nextVariables.some((variable) => {
         const previous = previousVariables.get(variable.name);
         return !previous ||
@@ -267,7 +269,7 @@ router.patch("/:id", requireAuth, async (req, res, next) => {
           variable.defaultValue !== previous.defaultValue ||
           variable.required !== previous.required;
       });
-    const contentChanged = nextTemplate !== existing.currentVersion.template || variablesChanged;
+    const contentChanged = nextTemplate !== existingVersion.template || variablesChanged;
 
     const data: Record<string, unknown> = {};
     if (changes.title !== undefined) data.title = changes.title;
@@ -278,8 +280,8 @@ router.patch("/:id", requireAuth, async (req, res, next) => {
     }
 
     const updated = await client.$transaction(async (tx) => {
-      let currentVersionId = existing.currentVersion.id;
-      let currentVersion = existing.currentVersion;
+      let currentVersionId = existingVersion.id;
+      let currentVersion = existingVersion;
 
       if (contentChanged) {
         const versionNumber = Math.max(
