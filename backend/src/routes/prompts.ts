@@ -1,11 +1,14 @@
 import { Router } from "express";
+import type { PrismaClient } from "../generated/prisma/client.js";
 import { z } from "zod";
 import { detectVariables } from "@prompt-vault/shared";
 import { getPrismaClient } from "../config/database.js";
 import { AppError } from "../errors/app-error.js";
-import { requireAuth } from "../middleware/require-auth.js";
+import { createRequireAuth } from "../middleware/require-auth.js";
 
-export const promptsRouter = Router();
+export function createPromptsRouter(getClient: () => PrismaClient = getPrismaClient): Router {
+const router = Router();
+const requireAuth = createRequireAuth(getClient);
 
 const variableSchema = z.object({
   name: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,49}$/),
@@ -31,7 +34,7 @@ function notFound(): AppError {
   return new AppError(404, "PROMPT_NOT_FOUND", "Prompt was not found");
 }
 
-promptsRouter.post("/", requireAuth, async (req, res, next) => {
+router.post("/", requireAuth, async (req, res, next) => {
   try {
     const parsed = createPromptSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -59,7 +62,7 @@ promptsRouter.post("/", requireAuth, async (req, res, next) => {
       return;
     }
 
-    const client = getPrismaClient();
+    const client = getClient();
     if (categoryId) {
       const category = await client.category.findFirst({
         where: { id: categoryId, userId: req.auth!.userId },
@@ -117,7 +120,7 @@ promptsRouter.post("/", requireAuth, async (req, res, next) => {
   }
 });
 
-promptsRouter.get("/", requireAuth, async (req, res, next) => {
+router.get("/", requireAuth, async (req, res, next) => {
   try {
     const querySchema = z.object({
       search: z.string().trim().max(100).optional(),
@@ -177,7 +180,7 @@ promptsRouter.get("/:id", requireAuth, async (req, res, next) => {
       return;
     }
 
-    const prompt = await getPrismaClient().prompt.findFirst({
+    const prompt = await getClient().prompt.findFirst({
       where: { id: promptId, userId: req.auth!.userId },
       include: {
         category: true,
@@ -199,3 +202,7 @@ promptsRouter.get("/:id", requireAuth, async (req, res, next) => {
     next(error);
   }
 });
+
+}
+
+export const promptsRouter = createPromptsRouter();
