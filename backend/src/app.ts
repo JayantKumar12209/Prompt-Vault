@@ -9,7 +9,10 @@ import { authRouter } from "./routes/auth.js";
 import { promptsRouter } from "./routes/prompts.js";
 import { healthRouter } from "./routes/health.js";
 
-export function createApp(authRouterInstance: Router = authRouter) {
+export function createApp(
+  authRouterInstance: Router = authRouter,
+  promptsRouterInstance: Router = promptsRouter
+) {
   const application = express();
 
   application.disable("x-powered-by");
@@ -21,7 +24,7 @@ export function createApp(authRouterInstance: Router = authRouter) {
 
   application.use("/api/health", healthRouter);
   application.use("/api/auth", authRouterInstance);
-  application.use("/api/prompts", promptsRouter);
+  application.use("/api/prompts", promptsRouterInstance);
   application.use(notFound);
   application.use(errorHandler);
 
