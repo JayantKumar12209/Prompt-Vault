@@ -63,11 +63,11 @@ function createFakePrisma() {
       const prompt = prompts.get(where.id);
       return prompt && prompt.userId === where.userId ? prompt : null;
     },
-    findMany: async ({ where }: any) => [...prompts.values()].filter((prompt) =>
+    findMany: async ({ where, skip = 0, take }: any) => [...prompts.values()].filter((prompt) =>
       prompt.userId === where.userId &&
       (!where.categoryId || prompt.categoryId === where.categoryId) &&
       (!where.tags || prompt.tags.includes(where.tags.has))
-    ),
+    ).slice(skip, take === undefined ? undefined : skip + take),
     count: async ({ where }: any) => [...prompts.values()].filter((prompt) =>
       prompt.userId === where.userId &&
       (!where.categoryId || prompt.categoryId === where.categoryId) &&
