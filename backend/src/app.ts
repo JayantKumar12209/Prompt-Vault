@@ -1,3 +1,4 @@
+
 import express, { type Router } from "express";
 import helmet from "helmet";
 import { errorHandler } from "./middleware/error-handler.js";
@@ -7,11 +8,17 @@ import { requestId } from "./middleware/request-id.js";
 import { requestLogger } from "./middleware/request-logger.js";
 import { authRouter } from "./routes/auth.js";
 import { promptsRouter } from "./routes/prompts.js";
+import { categoriesRouter } from "./routes/categories.js";
 import { healthRouter } from "./routes/health.js";
+import { favoritesRouter } from "./routes/favorites.js";
+import { collectionsRouter } from "./routes/collections.js";
 
 export function createApp(
   authRouterInstance: Router = authRouter,
-  promptsRouterInstance: Router = promptsRouter
+  promptsRouterInstance: Router = promptsRouter,
+  categoriesRouterInstance: Router = categoriesRouter,
+  favoritesRouterInstance: Router = favoritesRouter,
+  collectionsRouterInstance: Router = collectionsRouter
 ) {
   const application = express();
 
@@ -25,6 +32,10 @@ export function createApp(
   application.use("/api/health", healthRouter);
   application.use("/api/auth", authRouterInstance);
   application.use("/api/prompts", promptsRouterInstance);
+  application.use("/api/categories", categoriesRouterInstance);
+  application.use("/api/favorites", favoritesRouterInstance);
+  application.use("/api/collections", collectionsRouterInstance);
+
   application.use(notFound);
   application.use(errorHandler);
 

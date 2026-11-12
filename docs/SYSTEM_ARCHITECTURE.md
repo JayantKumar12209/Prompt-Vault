@@ -1,197 +1,483 @@
-# PromptVault — System Architecture
+﻿# PromptVault - System Architecture
 
-> **Status: DESIGN (Phase 2).** Nothing described here is implemented yet.
-> Each section is updated to reflect the real code as each phase ships.
+## Implementation Status
 
-## 1. Approved decisions
+PromptVault is an actively developed prompt management platform.
 
-| # | Decision |
-|---|----------|
-| 1 | Final deployment: Vercel (frontend) + Render/Railway (backend) + managed Postgres. Legacy GitHub Pages demo stays online until the new app is deployed and verified. |
-| 2 | Auth: opaque session token in an **httpOnly cookie**; frontend proxies `/api` to the backend so the cookie is same-origin. |
-| 3 | Password hashing: **Argon2id** via `@node-rs/argon2` (prebuilt binaries, no Windows build tools). |
-| 4 | Development database: free cloud Postgres (Neon). Tests use a separate database/branch. |
-| 5 | AI provider: Gemini; model name comes from `GEMINI_MODEL` env var. |
-| 6 | Schema: no `APIUsage` table; tags are a `String[]` column; `PromptVariable` belongs to a `PromptVersion`. |
-| 7 | Variable syntax is `{{name}}`. Legacy `{name}` is converted on legacy import only. |
-| 8 | Build order: vertical slice first (auth, CRUD, variables, real Gemini, deploy), then versions, collections, dashboard, import/export. |
+The current implementation includes:
 
-Additions made while designing (small, within the approved direction):
+- TypeScript monorepo with npm workspaces.
+- Express 5 backend API.
+- Prisma 7 database integration.
+- Neon PostgreSQL database.
+- User registration, login, logout, and session authentication.
+- Prompt CRUD and version management.
+- Prompt variable detection and validation.
+- Categories, favorites, and collections.
+- Automated shared-package and backend tests.
 
-- **`Session` table.** Needed for real logout and revocation with cookie auth. Only a SHA-256 hash of the token is stored.
-- **`shared/` workspace package.** Holds the variable engine and Zod schemas so frontend and backend use identical logic (no duplicated code).
-- **`Prompt.currentVersionId`.** Makes "search inside the current template" a simple join and avoids copying template text onto `Prompt`.
+The React frontend, AI provider integration, execution history, and production deployment are planned.
 
-## 2. High-level architecture
+## 1. Architecture Decisions
+
+| Area | Decision |
+|---|---|
+| Repository structure | npm workspaces: backend, frontend, shared |
+| Backend | Node.js, TypeScript, Express 5 |
+| Database | PostgreSQL hosted on Neon |
+| ORM | Prisma 7 |
+| Database adapter | Prisma Neon adapter |
+| Authentication | Server-side sessions with opaque tokens |
+| Password hashing | Argon2id using `@node-rs/argon2` |
+| Session storage | SHA-256 token hashes in PostgreSQL |
+| Validation | Zod |
+| Logging | Pino |
+| Security middleware | Helmet and custom Origin checks |
+| Prompt variables | `{{name}}` syntax |
+| Tags | PostgreSQL text array |
+| AI provider | Gemini integration planned |
+
+Additional architectural decisions:
+
+- A dedicated `Session` model supports server-side session validation and logout.
+- A shared workspace contains reusable application types and validation logic.
+- `PromptVersion` stores versioned prompt content.
+- `Prompt.currentVersionId` identifies the current prompt version.
+- `PromptVariable` records variable metadata associated with a prompt version.
+- `Favorite` and `CollectionPrompt` use composite identifiers to prevent duplicate relationships.
+
+## 2. High-Level Architecture
+
+### Current implementation
 
 ```mermaid
-flowchart LR
-  U["User (browser)"] --> FE["React frontend (Vercel)"]
-  FE -->|"/api/* rewrite, same-origin"| API["Express API (Render)"]
-  API --> MW["Middleware: helmet, origin check, rate limit, session auth, Zod validation"]
-  MW --> SVC["Services (business logic)"]
-  SVC --> DB[("PostgreSQL via Prisma")]
-  SVC --> AIS["AI provider service"]
-  AIS -->|"HTTPS, key from env"| GEM["Gemini API"]
+flowchart TD
+    CLIENT["API Client"]
+    subgraph BACKEND["Express 5 Backend"]
+        APP["Application Setup"]
+        MW["Middleware"]
+        AUTH["Authentication Routes"]
+        PROMPT["Prompt Routes"]
+        CATEGORY["Category Routes"]
+        FAV["Favorite Routes"]
+        COLL["Collection Routes"]
+        HEALTH["Health Routes"]
+    end
+    SHARED["Shared Workspace"]
+    PRISMA["Prisma 7"]
+    DB[("Neon PostgreSQL")]
+
+    CLIENT --> APP
+    APP --> MW
+    MW --> AUTH
+    MW --> PROMPT
+    MW --> CATEGORY
+    MW --> FAV
+    MW --> COLL
+    APP --> HEALTH
+    PROMPT --> SHARED
+    AUTH --> PRISMA
+    PROMPT --> PRISMA
+    CATEGORY --> PRISMA
+    FAV --> PRISMA
+    COLL --> PRISMA
+    HEALTH --> PRISMA
+    PRISMA --> DB
 ```
 
-### AI execution flow
+The backend currently exposes a REST API. A separate frontend application has not yet been implemented.
+
+### Implemented API route groups
+
+| Route group | Base path | Responsibility |
+|---|---|---|
+| Health | `/api/health` | Liveness and database readiness |
+| Authentication | `/api/auth` | Registration, login, current user, logout |
+| Prompts | `/api/prompts` | Prompt CRUD, search, and version management |
+| Categories | `/api/categories` | Category management |
+| Favorites | `/api/favorites` | Favorite management |
+| Collections | `/api/collections` | Collection and membership management |
+
+## 3. Backend Architecture
+
+The backend is organized around Express routes, middleware, configuration, authentication utilities, and Prisma database access.
+
+### Main components
+
+| Component | Responsibility |
+|---|---|
+| `src/app.ts` | Creates the Express application and mounts middleware and routes |
+| `src/server.ts` | Starts the HTTP server and handles graceful shutdown |
+| `src/routes/` | Implements API endpoint behavior |
+| `src/middleware/` | Authentication, Origin checks, request IDs, logging, errors, and not-found handling |
+| `src/auth/` | Session and password authentication functionality |
+| `src/config/` | Environment validation, database initialization, and logger configuration |
+| `prisma/` | Database schema and migration history |
+| `test/` | Backend automated tests |
+
+The current backend implements business logic within its route modules and supporting utilities. Separate controller, service, and provider layers are possible future refactoring improvements; they are not currently part of the implemented architecture.
+
+### Request lifecycle
+
+```mermaid
+flowchart TD
+    A["Incoming HTTP Request"]
+    B["Request ID"]
+    C["Request Logger"]
+    D["Helmet"]
+    E["Origin and Content-Type Check"]
+    F["JSON Body Parser"]
+    G["Route Handler"]
+    H["Authentication and Validation"]
+    I["Prisma Database Operation"]
+    J["Response"]
+    K["Central Error Handler"]
+
+    A --> B --> C --> D --> E --> F --> G
+    G --> H --> I --> J
+    G --> K
+```
+
+The request body parser has a 100 KB limit.
+
+Protected routes authenticate the user before performing user-scoped operations.
+
+## 4. Authentication Architecture
+
+Authentication uses server-side sessions.
+
+### Registration and login flow
 
 ```mermaid
 sequenceDiagram
-  participant U as User
-  participant FE as Prompt workspace
-  participant VP as Variable engine (shared)
-  participant API as POST /api/prompts/:id/execute
-  participant S as Execution service
-  participant P as Provider (Gemini or Mock)
-  participant DB as PostgreSQL
-
-  U->>FE: fill variable values, click Run
-  FE->>VP: detect and validate variables (client-side preview)
-  FE->>API: variable values (cookie auth)
-  API->>API: authenticate, rate limit, validate
-  API->>S: execute(userId, promptId, values)
-  S->>DB: load prompt owned by userId (404 otherwise)
-  S->>VP: render template (re-validated on server)
-  S->>DB: insert Execution status PENDING
-  S->>P: generate(renderedPrompt, timeout 30s)
-  alt provider success
-    P-->>S: text + usage
-    S->>DB: update Execution SUCCESS, response, tokens, latency
-  else provider failure or timeout
-    P-->>S: normalized error
-    S->>DB: update Execution ERROR or TIMEOUT with error code
-  end
-  S-->>API: execution record
-  API-->>FE: JSON (status, response or error, provider, model)
-  FE-->>U: output viewer (real vs demo badge)
+    participant U as User
+    participant API as Express API
+    participant HASH as Argon2id
+    participant DB as PostgreSQL
+    U->>API: Register or Login
+    API->>HASH: Hash or verify password
+    HASH-->>API: Verification result
+    API->>DB: Create or retrieve user
+    API->>API: Generate random session token
+    API->>API: Calculate SHA-256 token hash
+    API->>DB: Store session hash
+    API-->>U: Set HTTP-only session cookie
 ```
 
-Rules that follow from this flow:
+### Session properties
 
-- The server **never** reports `SUCCESS` unless the provider returned text.
-- The browser never sees the API key; the browser never calls Gemini directly.
-- Server re-renders the template; it does not trust a client-rendered prompt.
-- Demo mode (`AI_DEMO_MODE=true`) is the only path that uses the Mock provider. Those rows are stored with `provider = MOCK` and shown with a visible "Demo" badge. If no key is set and demo mode is off, execute returns `503 AI_NOT_CONFIGURED`.
+- Session tokens use cryptographically secure random bytes.
+- Tokens are encoded using Base64URL.
+- Only the SHA-256 hash is stored in the database.
+- Cookie name: `pv_session`.
+- HTTP-only cookie.
+- `SameSite=Lax`.
+- Secure attribute enabled in production.
+- Session duration: seven days.
+- Logout deletes the corresponding session record.
 
-## 3. Backend architecture
+The authentication middleware validates sessions before granting access to protected endpoints.
 
-```
-routes/        URL -> controller wiring only
-controllers/   parse request, call service, shape response (no business logic)
-services/      business rules, authorization scoping, transactions
-middleware/    auth, origin check, rate limit, validate(zod), error handler, request id
-validators/    thin wrappers around schemas from shared/
-providers/     AIProvider interface, GeminiProvider, MockProvider, error normalization
-config/        typed env loading (fails fast if invalid), constants
-utils/         logger (pino, redaction), hashing, tokens, pagination
-```
+## 5. Prompt Management and Versioning
 
-Provider interface:
+Prompt management is a central feature of PromptVault.
 
-```ts
-interface AIProvider {
-  readonly name: 'GEMINI' | 'MOCK';
-  generate(req: {
-    prompt: string; model: string; signal: AbortSignal;
-    temperature?: number; maxOutputTokens?: number;
-  }): Promise<{ text: string; model: string;
-    usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number } }>;
-}
-```
+### Prompt creation
 
-Normalized provider errors: `PROVIDER_AUTH`, `PROVIDER_RATE_LIMIT`, `PROVIDER_TIMEOUT`, `PROVIDER_BLOCKED` (safety), `PROVIDER_BAD_REQUEST`, `PROVIDER_UNAVAILABLE`. Raw provider messages are logged server-side, not returned to users.
+When a user creates a prompt:
 
-One automatic retry is allowed only for network errors and 5xx. No automatic retry for 4xx or timeouts. User-triggered retry is a separate endpoint and creates a new Execution row.
+1. The API validates the request.
+2. The backend checks category ownership when a category is supplied.
+3. Prompt variables are detected and validated.
+4. A prompt and its first version are created in a database transaction.
+5. The created prompt is returned to the client.
 
-### Authorization rule (IDOR protection)
+### Prompt updates
 
-Every service method takes `userId` and every Prisma query includes it in `where` (e.g. `findFirst({ where: { id, userId } })`). Resources owned by someone else return **404**, not 403, so existence is not leaked. Join tables (collection↔prompt) verify both sides belong to the same user in the service, because the database cannot express that constraint.
+- Metadata-only changes update the prompt without creating a new version.
+- Template or variable metadata changes create a new prompt version.
+- Matching existing variable metadata is preserved when applicable.
+- The current version reference is updated.
 
-## 4. Frontend architecture
+Dedicated APIs for listing individual versions, comparing versions, and restoring old versions are planned.
 
-Stack: React, TypeScript, Vite, Tailwind, React Router, TanStack Query, React Hook Form + Zod.
+## 6. Shared Workspace and Variable Engine
 
-Pages and routes:
+The `shared` workspace contains reusable logic and types used by the application.
 
-| Route | Page |
-|-------|------|
-| `/login`, `/register` | Authentication |
+The prompt variable syntax is:
+
+`{{variable_name}}`
+
+Implemented functionality includes:
+
+- Detecting variable placeholders.
+- Identifying unique variable names.
+- Validating variable definitions.
+- Detecting malformed placeholders.
+- Validating required variable values.
+- Supporting optional variables and default values.
+- Rendering templates using supplied values.
+
+Variable identifiers follow this pattern:
+
+`^[A-Za-z_][A-Za-z0-9_]{0,49}$`
+
+Configured limits include:
+
+| Item | Limit |
+|---|---:|
+| Template | 50,000 characters |
+| Variable value | 10,000 characters |
+| Variables per template | 50 |
+
+Rendering is designed as a single-pass replacement operation. Values are inserted as text and are not recursively interpreted as additional placeholders.
+
+AI prompt execution and provider-side rendering are not yet implemented.
+
+## 7. Database Architecture
+
+PromptVault uses PostgreSQL with Prisma 7 and the Neon serverless adapter.
+
+### Main database models
+
+| Model | Purpose |
+|---|---|
+| User | Stores user account information |
+| Session | Stores hashed session tokens |
+| Category | User-defined prompt categories |
+| Prompt | Stores prompt metadata and current version reference |
+| PromptVersion | Stores versioned prompt content |
+| PromptVariable | Stores variable definitions for a prompt version |
+| Favorite | Associates users with favorite prompts |
+| Collection | Stores user-defined prompt collections |
+| CollectionPrompt | Associates prompts with collections |
+| Execution | Reserved for future AI execution records |
+
+### Important database constraints
+
+- User email addresses are unique.
+- Category names are unique per user.
+- Collection names are unique per user.
+- Prompt version numbers are unique per prompt.
+- Favorite records are unique per user and prompt.
+- Collection membership is unique per collection and prompt.
+- User-owned records use relational ownership and cascade behavior where configured.
+
+The service/API layer must verify ownership of both sides of collection membership because the database relationship alone does not enforce same-user ownership.
+
+### Migration status
+
+- Prisma schema validation completed.
+- Prisma Client generation completed.
+- Initial migration file created.
+- Initial migration applied to the configured Neon PostgreSQL database.
+- `npx prisma migrate status` reported that the database schema is up to date.
+
+See [Database Design](DATABASE_DESIGN.md) for the complete schema and relationship documentation.
+
+## 8. Frontend Architecture
+
+**Status: Planned**
+
+The frontend directory currently exists as a workspace scaffold. It does not yet contain the implemented React application.
+
+The intended frontend stack is:
+
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+
+Planned application areas include:
+
+| Route | Planned responsibility |
+|---|---|
+| `/login` | User login |
+| `/register` | User registration |
 | `/` | Dashboard |
-| `/prompts` | Prompt library (search, filter, sort, pagination) |
-| `/prompts/:id` | **Workspace**: editor + variable inputs + output (the legacy three-pane layout) |
-| `/prompts/:id/versions` | Version history and compare |
-| `/history`, `/history/:id` | Execution history |
-| `/collections`, `/collections/:id` | Collections |
-| `/import-export` | Import / export |
-| `/settings` | Theme, account |
+| `/prompts` | Prompt library |
+| `/prompts/:id` | Prompt editor and workspace |
+| `/collections` | Collection management |
+| `/settings` | Account and application settings |
 
-Component groups: `AppLayout` (sidebar, topbar, theme toggle), `PromptList`, `PromptEditor`, `VariableInputs` (generated from `detectVariables`), `ExecutionPanel`, `OutputViewer`, `VersionDiff`, `ConfirmDialog`, `Toast`, `EmptyState`, `ProtectedRoute`.
+Additional frontend features may include prompt variable inputs, version history, execution output, and responsive layouts.
 
-State: server state in TanStack Query; auth user in `AuthContext`; theme in `ThemeContext` (persisted in `localStorage`, which is the one acceptable use of it).
+These routes and components are design targets, not implemented application functionality.
 
-Rendering rules: React text nodes only; no `dangerouslySetInnerHTML`. AI output is shown as plain preformatted text first; if Markdown rendering is added it uses a renderer that does not allow raw HTML.
+## 9. AI Execution Architecture
 
-## 5. Variable engine (in `shared/`)
+**Status: Planned**
 
-- Placeholder pattern: `{{name}}`, whitespace allowed inside braces. Valid name: `^[A-Za-z_][A-Za-z0-9_]{0,49}$`.
-- `detectVariables(template)` returns unique names in first-appearance order, plus `invalid` for malformed placeholders such as `{{1a}}` or `{{a-b}}` (reported to the user, not silently ignored).
-- `render(template, values, defs)` is a **single-pass** replacement, so a value containing `{{other}}` is inserted literally and never re-expanded.
-- Required variables with missing or whitespace-only values fail with a list of names. Optional empty variables use the default or empty string.
-- Literal braces: write `\{{` to output `{{`.
-- Output is plain text. Nothing is evaluated, and nothing is inserted as HTML.
-- Limits: template 50,000 chars; value 10,000 chars; 50 variables per template.
-- `convertLegacy(template)` turns `{name}` into `{{name}}` (used only for legacy prompt import).
+Gemini is the intended AI provider.
 
-## 6. Security design (summary; detail in SECURITY.md)
+The planned execution architecture is:
 
-Argon2id; hashed opaque session tokens; httpOnly + Secure + SameSite=Lax cookie; Origin check on state-changing requests; Zod on every body, query and param; helmet; strict CORS; rate limits; per-user data scoping; safe import (strict schema, no client-supplied IDs, size caps); error handler hides stack traces; secrets only from env; `.env` git-ignored.
+```mermaid
+flowchart TD
+    A["Frontend submits variable values"]
+    B["Backend authenticates user"]
+    C["Backend validates prompt ownership"]
+    D["Backend renders prompt template"]
+    E["AI Provider Service"]
+    F["Gemini API"]
+    G["Store execution result"]
+    H["Return response to client"]
 
-## 7. Deployment topology
+    A --> B --> C --> D --> E --> F --> G --> H
+```
+
+Planned security requirements:
+
+- Provider credentials remain on the backend.
+- The frontend must never call the provider using a server API key.
+- The server validates and renders prompt templates.
+- Provider failures and timeouts are handled safely.
+- Execution history is associated with the authenticated user.
+- Appropriate per-user usage limits are enforced.
+
+The current API does not expose prompt execution endpoints. The `Execution` database model is reserved for this future functionality.
+
+## 10. Security Architecture
+
+Implemented controls include:
+
+- Argon2id password hashing.
+- Hashed session token storage.
+- HTTP-only session cookies.
+- Authentication middleware.
+- User-scoped resource access.
+- Zod request validation.
+- Helmet security headers.
+- Origin and JSON content-type checks.
+- Authentication rate limiting.
+- Centralized error handling.
+- Request IDs.
+- A 100 KB JSON body limit.
+
+Production deployment security, frontend security, AI execution limits, and other planned protections require further work.
+
+See [Security Documentation](SECURITY.md).
+
+## 11. Environment and Runtime Configuration
+
+Backend environment configuration is validated using Zod.
+
+The example file is:
+
+`backend/.env.example`
+
+| Variable | Purpose |
+|---|---|
+| `NODE_ENV` | Application environment |
+| `PORT` | HTTP server port |
+| `FRONTEND_ORIGIN` | Allowed frontend Origin |
+| `LOG_LEVEL` | Pino logging level |
+| `DATABASE_URL` | Runtime PostgreSQL connection |
+| `DIRECT_URL` | Direct PostgreSQL connection for Prisma CLI operations |
+
+The backend uses `DATABASE_URL` through the Prisma Neon adapter.
+
+Prisma CLI database operations use `DIRECT_URL` through `backend/prisma.config.ts`.
+
+Actual credentials must be supplied locally or through the deployment environment. They must never be committed to the repository.
+
+## 12. Deployment Architecture
+
+**Status: Not yet deployed**
+
+The current application has been developed locally with a Neon PostgreSQL database.
+
+The following is a possible future deployment topology, not an existing production deployment:
 
 ```mermaid
 flowchart LR
-  B["Browser"] --> V["Vercel: static frontend + /api rewrite"]
-  V --> R["Render: Express API"]
-  R --> N[("Neon Postgres")]
-  R --> G["Gemini API"]
+    B["Browser"]
+    FE["Frontend Hosting"]
+    API["Backend Hosting"]
+    DB[("Neon PostgreSQL")]
+    AI["Gemini API - Planned"]
+
+    B --> FE
+    FE --> API
+    API --> DB
+    API -.-> AI
 ```
 
-Local development: Vite dev server proxies `/api` to `localhost:4000`; database is Neon (dev); `docker-compose.yml` provides containers for the backend/frontend and an optional local Postgres for offline work and CI-like runs.
+Deployment provider selection, frontend/backend domain configuration, proxy settings, production cookie behavior, and deployment monitoring still require verification.
 
-Known deployment unknowns (to verify when deploying, not assume): free-tier cold starts on the backend host; correct `trust proxy` hop count behind Vercel + Render for rate-limit IPs.
+## 13. Repository Structure
 
-## 8. Repository layout
-
-```
+```text
 Prompt-Vault/
-├─ index.html            (legacy app, untouched until the new app is verified)
-├─ frontend/             src/{components,pages,layouts,hooks,services,contexts,types,utils}
-├─ backend/              src/{config,routes,controllers,services,middleware,validators,providers,utils}
-│                        prisma/schema.prisma, tests/
-├─ shared/               variable engine, Zod schemas, types
-├─ e2e/                  Playwright tests
-├─ docs/
-├─ docker-compose.yml
-├─ .env.example (root, backend, frontend)
-├─ .gitignore
-└─ README.md
+├── backend/
+│   ├── prisma/
+│   │   ├── migrations/
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── auth/
+│   │   ├── config/
+│   │   ├── middleware/
+│   │   └── routes/
+│   ├── test/
+│   ├── .env.example
+│   └── package.json
+├── frontend/
+│   └── package.json
+├── shared/
+│   ├── src/
+│   ├── test/
+│   └── package.json
+├── docs/
+│   ├── API_DOCUMENTATION.md
+│   ├── DATABASE_DESIGN.md
+│   ├── SECURITY.md
+│   └── SYSTEM_ARCHITECTURE.md
+├── package.json
+├── package-lock.json
+├── tsconfig.base.json
+├── index.html
+└── README.md
 ```
 
-The legacy `index.html` moves to `legacy/` only after the new app is deployed and verified.
+The frontend is currently a scaffold. The existing root `index.html` has not been replaced by a completed React application.
 
-## 9. Roadmap and exit criteria
+## 14. Development and Verification
 
-| Phase | Deliverable | Verified by |
-|-------|-------------|-------------|
-| 3 | Monorepo, TS, Prisma + first migration on Neon, env validation, error handling, health endpoint | App starts; `/api/health` returns OK; migration applied |
-| 4 | Auth, prompt CRUD, variables, categories, favorites, search/pagination | Backend integration tests; manual run |
-| 5 | Gemini provider, execution, history, demo mode | Mocked-provider tests; one real call with your key |
-| 6 | Versioning and compare, collections, import/export, dashboard | Integration tests |
-| 7 | Responsive layout, accessibility, themes, empty/loading/error states | Manual checks on desktop and mobile widths |
-| 8 | Unit, integration and Playwright tests, lint, typecheck, builds, CI | Green test run |
-| 9 | README, docs, screenshots of the running app | Docs match code |
-| 10 | Clean-clone verification and final report | Fresh setup following README |
+The following commands are available from the repository root:
 
-After Phase 5 the project already supports an honest resume line about a full-stack app with real AI execution. Wait until each feature is working before putting it on the resume.
+| Command | Purpose |
+|---|---|
+| `npm install` | Install workspace dependencies |
+| `npm run dev:backend` | Start the backend development server |
+| `npm test` | Run shared and backend automated tests |
+| `npm run typecheck` | Type-check shared and backend packages |
+| `npm run build` | Build shared and backend packages |
+
+Latest recorded automated test results:
+
+- Shared tests: 8 passed.
+- Backend tests: 30 passed.
+- Total: 38 passed.
+
+The backend route tests use an injected fake Prisma client. Live database integration testing is still required.
+
+## 15. Roadmap
+
+| Stage | Deliverable | Status |
+|---|---|---|
+| Foundation | Monorepo, TypeScript, Prisma, Neon, environment validation, health endpoint | Implemented |
+| Authentication | Registration, login, logout, session validation | Implemented |
+| Prompt management | CRUD, variable validation, prompt version creation | Implemented |
+| Organization | Categories, favorites, collections, membership | Implemented; verification completed locally |
+| Documentation | README, API, security, architecture documentation | In progress |
+| Frontend | React application and responsive UI | Planned |
+| AI execution | Gemini integration and execution history | Planned |
+| Quality assurance | Live database integration tests, expanded test coverage, CI | Planned |
+| Deployment | Production hosting, configuration, and monitoring | Planned |
+
+## 16. Project Direction
+
+The development approach is to complete and verify backend functionality first, establish a clear public repository, and then build the frontend and AI execution features.
+
+All documentation should describe the current implementation accurately and distinguish completed functionality from future plans.
