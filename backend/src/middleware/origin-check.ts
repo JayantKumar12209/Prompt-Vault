@@ -15,7 +15,13 @@ export const originCheck: RequestHandler = (req, _res, next) => {
     return;
   }
 
-  if (!req.is("application/json")) {
+  const contentType = req
+    .get("content-type")
+    ?.split(";")[0]
+    ?.trim()
+    .toLowerCase();
+
+  if (contentType !== "application/json") {
     next(new AppError(415, "JSON_REQUIRED", "Content-Type must be application/json"));
     return;
   }
