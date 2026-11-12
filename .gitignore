@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output and caches
+dist/
+**/dist/
+coverage/
+.turbo/
+.cache/
+
+# Environment files (keep examples)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Generated Prisma Client
+backend/src/generated/
+backend/generated/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# TypeScript incremental build metadata
+*.tsbuildinfo
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo

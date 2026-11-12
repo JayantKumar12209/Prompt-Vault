@@ -1,0 +1,188 @@
+// PromptVault — Prisma schema (Phase 3: validation and client generation)
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AIProviderName {
+  GEMINI
+  MOCK
+}
+
+enum ExecutionStatus {
+  PENDING
+  SUCCESS
+  ERROR
+  TIMEOUT
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique // stored lowercased
+  passwordHash String
+  displayName  String?  @db.VarChar(100)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions    Session[]
+  categories  Category[]
+  prompts     Prompt[]
+  collections Collection[]
+  favorites   Favorite[]
+  executions  Execution[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique // SHA-256 of the cookie token; raw token is never stored
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String   @db.VarChar(50)
+  createdAt DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prompts Prompt[]
+
+  @@unique([userId, name])
+}
+
+model Prompt {
+  id               String   @id @default(cuid())
+  userId           String
+  categoryId       String?
+  title            String   @db.VarChar(200)
+  description      String?  @db.VarChar(1000)
+  tags             String[]
+  currentVersionId String?  @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category       Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  currentVersion PromptVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions       PromptVersion[] @relation("VersionHistory")
+  favorites      Favorite[]
+  collections    CollectionPrompt[]
+  executions     Execution[]
+
+  @@index([userId, updatedAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, categoryId])
+  @@index([tags], type: Gin)
+}
+
+// Immutable once created. Restoring an old version creates a NEW version with copied content.
+model PromptVersion {
+  id            String   @id @default(cuid())
+  promptId      String
+  versionNumber Int
+  template      String   @db.Text
+  changeNote    String?  @db.VarChar(300)
+  createdAt     DateTime @default(now())
+
+  prompt     Prompt           @relation("VersionHistory", fields: [promptId], references: [id], onDelete: Cascade)
+  currentFor Prompt?          @relation("CurrentVersion")
+  variables  PromptVariable[]
+  executions Execution[]
+
+  @@unique([promptId, versionNumber])
+}
+
+// Metadata only. Variable names are derived from the template; this stores per-version settings.
+model PromptVariable {
+  id           String  @id @default(cuid())
+  versionId    String
+  name         String  @db.VarChar(50)
+  description  String? @db.VarChar(300)
+  defaultValue String? @db.VarChar(10000)
+  required     Boolean @default(true)
+
+  version PromptVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, name])
+}
+
+model Collection {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(500)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prompts CollectionPrompt[]
+
+  @@unique([userId, name])
+}
+
+// Service layer must verify the collection and the prompt belong to the same user.
+model CollectionPrompt {
+  collectionId String
+  promptId     String
+  addedAt      DateTime @default(now())
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  prompt     Prompt     @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, promptId])
+  @@index([promptId])
+}
+
+model Favorite {
+  userId    String
+  promptId  String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prompt Prompt @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  @@id([userId, promptId])
+  @@index([promptId])
+}
+
+// History row. Prompt/version links become null if those are deleted; the rendered prompt snapshot stays.
+// Per-user daily quota and usage stats are aggregated from this table (no separate APIUsage table).
+model Execution {
+  id               String          @id @default(cuid())
+  userId           String
+  promptId         String?
+  promptVersionId  String?
+  provider         AIProviderName
+  model            String          @db.VarChar(100)
+  status           ExecutionStatus @default(PENDING)
+  variableValues   Json
+  renderedPrompt   String          @db.Text
+  response         String?         @db.Text
+  errorCode        String?         @db.VarChar(50)
+  errorMessage     String?         @db.VarChar(500)
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  latencyMs        Int?
+  createdAt        DateTime        @default(now())
+  completedAt      DateTime?
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prompt        Prompt?        @relation(fields: [promptId], references: [id], onDelete: SetNull)
+  promptVersion PromptVersion? @relation(fields: [promptVersionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([promptId])
+  @@index([userId, status])
+}

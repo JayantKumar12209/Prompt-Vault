@@ -1,0 +1,33 @@
+{
+  "name": "prompt-vault",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A secure, full-stack prompt management and execution platform.",
+  "workspaces": [
+    "frontend",
+    "backend",
+    "shared"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "dev:backend": "npm run dev -w @prompt-vault/backend",
+    "build:shared": "tsc -b shared",
+    "typecheck:shared": "tsc --noEmit -p shared/tsconfig.json",
+    "test:shared": "npm run build:shared && node --test shared/test/*.test.mjs",
+    "build:backend": "npm run build -w @prompt-vault/backend",
+    "typecheck:backend": "npm run typecheck -w @prompt-vault/backend",
+    "build": "npm run build:shared && npm run build:backend",
+    "typecheck": "npm run typecheck:shared && npm run typecheck:backend",
+    "test": "npm run test:shared && npm run test -w @prompt-vault/backend"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "allowScripts": {
+    "@prisma/engines@7.10.1": true,
+    "esbuild@0.28.2": true,
+    "prisma@7.10.1": true
+  }
+}
